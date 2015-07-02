@@ -1,0 +1,168 @@
+.\"-
+.\" Copyright (c) 2009-2010 Tom Rhodes
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.\" $Id: fscd.8 2063 2013-06-03 14:03:41Z bsdtrhodes $
+.\"
+.Dd March 15, 2012
+.Dt FSCD 8
+.Os
+.Sh NAME
+.Nm fscd
+.Nd "service state monitoring daemon"
+.Sh SYNOPSIS
+.Nm
+.Op Fl Vvf
+.Op Fl s Ar socket
+.Op Fl c Ar file
+.Sh DESCRIPTION
+.Nm
+(
+.Fx
+service control daemon) is a daemon which monitors states of services and
+restarts them if they die.
+.Pp
+When invoked, the
+.Nm
+utility will check for services listed in its configuration file and create a
+socket to listen for messages from
+.Xr fscadm 8 , (
+.Fx
+services control administration utility), the control program for fscd.
+.Pp
+When monitored services terminate, they will be restarted, and a notification
+will be logged to the
+.Dv LOG_ERR
+facility.
+If
+.Nm
+is unable to successfully start a service, it will be removed and a log message
+will be issued.
+.Pp
+.Nm
+uses the
+.Xr kqueue 2
+interface to be notified about process terminations and
+.Xr rc 8 ,
+resp.
+.Xr service 8
+for (re)starting services, getting their pids and initially checking their
+status.
+.Pp
+.Nm
+is subject the same rules which govern
+.Xr rc 8 ;
+meaning that services must have an entry in
+.Xr rc.conf 5
+before they may be handled through this interface.
+After successfully becoming a daemon, services may be added using the
+.Xr fscadm 8
+utility.
+.Ss SIGNALS
+Several signals don't restart the service immediately as they may be the result 
+of the user restarting it by hand. Instead,
+.Nm
+will wait up to 60 seconds for the service to restart.
+These are:
+.Bl -dash -compact -offset
+.It
+SIGINT
+.It
+SIGTERM
+.It
+SIGUSR1
+.It
+SIGUSR2
+.It
+SIGKILL
+.El
+.Sh OPTIONS
+.Bl -tag
+.It Fl V
+Print out the version of
+.Nm
+and exit.
+.It Fl v
+Verbose, don't fork to background and don't log to
+.Xr syslog 3
+but to console.
+.It Fl f
+Force, if the socket already exists, delete it.
+This can occur if
+.Nm
+is already running or was not properly shut down before.
+.It Fl s Ar socket
+Use socket
+.Ar socket
+instead of the standard socket
+.Pa /var/run/fscd.sock .
+.It Fl c Ar file
+Use file
+.Ar file
+as configuration file instead of the standard file
+.Pa /etc/fscd.conf .
+.El
+.Sh FILES
+.Bl -tag -width /var/run/fscd.sock -compact
+.It Pa /var/run/fscd.sock
+name of the
+.Ux
+domain socket
+.It Pa /etc/fscd.conf
+name of the configuration file
+.El
+.Sh SEE ALSO
+.Xr kqueue 2 ,
+.Xr signal 3 ,
+.Xr syslog 3 ,
+.Xr fscd.conf 5 ,
+.Xr rc.conf 5 ,
+.Xr fscadm 8 ,
+.Xr rc 8 ,
+.Xr rcorder 8 ,
+.Xr service 8 ,
+.Xr syslog 8
+.Sh HISTORY
+.Nm
+utility first appeared in
+.Fx 10.0
+as part of the
+.Fx
+service control utilities.
+.Sh AUTHORS
+The
+.Nm fsc
+utilities and documentation were written by
+.An Tom Rhodes Aq trhodes@FreeBSD.org .
+.Sh BUGS
+The
+.Nm
+utility may fail to start a service if the parent died with a
+SIGKILL and children, with unique PIDs are not subsequently
+killed off.
+Such cases usally leave resources, such as port numbers or
+pidfiles around which confuse
+.Xr service 8 .
+This behavior has been observed on several operating systems
+and should possibly be fixed by the software in question.

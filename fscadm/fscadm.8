@@ -1,0 +1,137 @@
+.\"-
+.\" Copyright (c) 2009-2010 Tom Rhodes
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.\" $Id: fscadm.8 1941 2012-05-07 18:11:15Z bsdtrhodes $
+.\"
+.Dd July 24, 2010
+.Dt FSCADM 1
+.Os
+.Sh NAME
+.Nm fscadm
+.Nd "Alter service monitoring status"
+.Sh SYNOPSIS
+.Nm
+.Ar close
+.Nm
+.Ar disable Ar service
+.Nm
+.Ar enable Ar service Ar pidfile
+.Nm
+.Ar shutdown
+.Nm
+.Ar status
+.Sh DESCRIPTION
+The
+.Fx
+services control administration utility,
+.Nm
+enables or disables monitoring for a specified service.
+It may also be used to print a list of services
+currently being monitored or cleanly shutdown
+the services control daemon,
+.Xr fscd 8 .
+.Pp
+When invoked
+.Nm
+will connect with the
+.Xr fscd 8
+daemon and carry out the requested actions.
+Changes in service states will not be propagated to the
+.Xr rc.conf 5
+file, these alterations must be handled manually.
+In addition,
+.Nm
+only supports services which may be monitored through a
+.Pa pidfile
+and have a corresponding
+.Xr rc 8
+control script.
+The following options are available:
+.Bl -tag -width ".Cm shutdown"
+.It Cm close
+Close the
+.Xr fscd 8
+daemon but leave its service configuration file,
+.Pa /var/db/fsc/services.db ,
+in place.
+This is preferred when services will persist over system reboots.
+.It Cm disable
+Disable monitoring for the requested service.
+The service will not be stopped prior to removal.
+If the requested service is unknown, this command will be ignored.
+.It Cm enable
+Enable service monitoring for the requested service.
+The first argument must be the
+.Xr rc 8
+control script name and the second is an absolute path to the
+.Pa pidfile .
+A service must have an enable entry in
+.Xr rc.conf 5
+or it will not be added.
+If the service is currently not running, it will be started
+using the provided information.
+If the service cannot start,
+.Nm
+will exit without attempting to contact the
+.Xr fscd 8
+daemon.
+.It Cm shutdown
+Request a clean shutdown of
+.Xr fscd 8
+including removal of the known services database and socket file.
+.It Cm status
+Print the
+.Xr fscd 8
+process id and a list of all services being monitored.
+Services that cannot be started through
+.Xr fscd 8
+will be removed from the list during failure.
+.El
+.Pp
+In both the enable and disable cases,
+.Nm fscd
+will update the database file with the new information.
+.Sh EXIT STATUS
+Exit status is 0 on success or 1 if the command has failed
+to start a service.
+.Sh SEE ALSO
+.Xr rc.conf 5 ,
+.Xr fscd 8 ,
+.Xr rc 8 ,
+.Xr rcorder 8 ,
+.Xr service 8
+.Sh HISTORY
+The
+.Nm
+utility first appeared in
+.Fx 9.0
+as part of the
+.Nm fsc
+collection of service control utilities.
+.Sh AUTHORS
+The
+.Nm fsc
+utilities and documentation were written by
+.An Tom Rhodes Aq trhodes@FreeBSD.org .
