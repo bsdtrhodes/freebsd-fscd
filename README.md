@@ -10,10 +10,13 @@ If the application should crash, fscd will attempt to restart.  Failure will lea
 Reasons to use:
 
 o kqueue() support provides push rather than pulling the applications, reducing system resources;
+
 o Integration with FreeBSD's rc and service utilities do not require much overhead for configuration;
+
 o Other applications may be too bloated or too configuration heavy for some reasons.
 
 Reasons to not use:
 
 o You have something better that provides, say, web dashboard and multiple server monitoring, beyond the scope of fscd.
+
 o You're using a non-BSD operating system.
