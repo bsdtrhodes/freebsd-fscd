@@ -97,7 +97,7 @@ main(int argc, char *argv[])
 		usage();
 
 	/* shutdown, status */
-	if ((strcmp(argv[0], "shutdown") == 0) 
+	if ((strcmp(argv[0], "shutdown") == 0)
 			|| (strcmp(argv[0], "status") == 0)) {
 		if (argc != 1)
 			usage();
@@ -137,7 +137,7 @@ usage(void)
 			"\n"
 			"options:\n"
 			"        -V   Print out version.\n"
-			"        -s S Use socket S instead of standard.\n " );
+			"        -s S Use socket S instead of standard.\n" );
 	exit(EX_USAGE);
 }
 

@@ -418,13 +418,13 @@ while I was waiting for it to restart.", inputv->sname);
 		}
 		sleep(10);
 	}
-	printlog(LOG_ERR, "Service %s was not restarted. Doing it myself.", 
+	printlog(LOG_ERR, "Service %s was not restarted. Doing it myself.",
 	    inputv->sname);
 	pthread_mutex_lock(&inputv->config->service_mtx);
 	handle_restart(inputv->config, inputv->sname);
 	pthread_mutex_unlock(&inputv->config->service_mtx);
 	return NULL;
-	
+
 	printlog(LOG_ERR, "Service %s should be waited for, but was not found.",
 	    inputv->sname);
 	return NULL;
