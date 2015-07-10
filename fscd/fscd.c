@@ -268,22 +268,27 @@ handle_queue(struct fscd_cfg *config, struct kevent *kq_events)
 			if (kq_events->ident == (uintptr_t)svpid->svpid) {
 				status = kq_events->data;
 				if (WIFSIGNALED(status)) {
-					printlog(LOG_ERR, "%s caught signal %d and exited", svs->svname,
+					printlog(LOG_ERR, "%s caught signal %d"
+					    " and exited", svs->svname,
 					    WTERMSIG(status));
 					pretcode = process_exited(status, svs);
 				} else if (WIFEXITED(status)) {
-					printlog(LOG_ERR, "%s exited with status %d",
-							svs->svname, WEXITSTATUS(status));
+					printlog(LOG_ERR, "%s exited with "
+					    "status %d",
+					    svs->svname, WEXITSTATUS(status));
 					pretcode = 0;
 				} else {
 					continue;
 				}
 
-				if (pretcode == 1 && handle_restart(config, svs->svname) == 0) {
+				if (pretcode == 1 && handle_restart(config,
+				    svs->svname) == 0) {
 					printlog(LOG_ERR, "%s was restarted",
 					    svs->svname);
-				} else if (pretcode == 0 && handle_waiting(config, svs->svname) == 0) {
-					printlog(LOG_ERR, "Waiting for %s to restart.", svs->svname);
+				} else if (pretcode == 0 && handle_waiting(config,
+				    svs->svname) == 0) {
+					printlog(LOG_ERR, "Waiting for %s to restart.",
+					    svs->svname);
 				} else {
 					printlog(LOG_ERR, "%s failed to restart.",
 							svs->svname);
@@ -340,9 +345,12 @@ handle_restart(struct fscd_cfg *config, char *sname)
 
 		if ((ret=start_service(svs))) {
 			if (ret < 0)
-				printlog(LOG_ERR, "%s could not be restarted.", svs->svname);
+				printlog(LOG_ERR, "%s could not be restarted.",
+				    svs->svname);
 			else
-				printlog(LOG_ERR, "%s could not be restarted. Set %s_enable to YES in %cetc/rc.conf.", svs->svname, svs->svname, '/');
+				printlog(LOG_ERR, "%s could not be restarted. Set "
+				    "%s_enable to YES in %cetc/rc.conf.",
+				    svs->svname, svs->svname, '/');
 			return ret;
 		} else if ((ret=fill_pids(svs))) {
 			printlog(LOG_ERR, "Could not get pids for service.");
@@ -404,10 +412,12 @@ wait_restart(void *var)
 			pthread_mutex_lock(&inputv->config->service_mtx);
 			if (!fill_pids(svs)) {
 				if (kqueue_service(inputv->config, svs))
-					printlog(LOG_ERR, "Could not monitor service.");
+					printlog(LOG_ERR, "Could not monitor "
+					    "service.");
 				else
-					printlog(LOG_INFO, "Service %s was restarted, but not by me.",
-							svs->svname);
+					printlog(LOG_INFO, "Service %s was "
+					    "restarted, but not by me.",
+					    svs->svname);
 				pthread_mutex_unlock(&inputv->config->service_mtx);
 				return NULL;
 			}
@@ -415,8 +425,9 @@ wait_restart(void *var)
 			break;
 		}
 		if (!svs) {
-			printlog(LOG_ERR, "Service %s was removed from monitoring \
-while I was waiting for it to restart.", inputv->sname);
+			printlog(LOG_ERR, "Service %s was removed from "
+			    "monitoring while I was waiting for it to restart.",
+			    inputv->sname);
 			return NULL;
 		}
 		sleep(10);
@@ -465,7 +476,8 @@ print_status(struct fscd_cfg *config, int sock_fd)
 	}
 
 	/* Monitored pids header. */
-	if (asprintf(&statstream, "%-40s %s\n--------------------------------------------------\n", "process name", "pid") <= 0) {
+	if (asprintf(&statstream, "%-40s %s\n-------------------------------"
+	    "-------------------\n", "process name", "pid") <= 0) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
 			printlog(LOG_ERR, "asprintf failed.");
 		else
@@ -483,21 +495,29 @@ print_status(struct fscd_cfg *config, int sock_fd)
 	/* Monitored pids. */
 	SLIST_FOREACH(svs, &config->service_list, next) {
 		SLIST_FOREACH(svpid, &svs->svpids, next) {
-			if (asprintf(&statstream, "%-40s %d\n", svs->svname, svpid->svpid) > 0) {
-				if (send(sock_fd, statstream, strlen(statstream), 0) == -1) {
-					if (strerror_r(errno, errorstr, sizeof errorstr))
-						printlog(LOG_ERR, "send failed.");
+			if (asprintf(&statstream, "%-40s %d\n",
+			    svs->svname, svpid->svpid) > 0) {
+				if (send(sock_fd, statstream,
+				    strlen(statstream), 0) == -1) {
+					if (strerror_r(errno, errorstr,
+					    sizeof errorstr))
+						printlog(LOG_ERR,
+						    "send failed.");
 					else
-						printlog(LOG_ERR, "send: %s", errorstr);
+						printlog(LOG_ERR,
+						    "send: %s", errorstr);
 					free(statstream);
 					break;
 				}
 				free(statstream);
 			} else {
-				if (strerror_r(errno, errorstr, sizeof errorstr))
-					printlog(LOG_ERR, "asprintf for send failed.");
+				if (strerror_r(errno, errorstr,
+				    sizeof errorstr))
+					printlog(LOG_ERR, "asprintf for send "
+					    "failed.");
 				else
-					printlog(LOG_ERR, "asprintf for send failed: %s", errorstr);
+					printlog(LOG_ERR, "asprintf for send "
+					    "failed: %s", errorstr);
 			}
 		}
 	}
@@ -553,8 +573,8 @@ printlog(int priority, const char *logstr, ...)
 }
 
 /*
- * Check whether a service given by sname is running. We use service(8) for
- * that. It knows best about the running specifica of the service.
+ * Check whether a service given by sname is running. We use service(8)
+ * for that. It knows best about the running specifica of the service.
  */
 static int
 service_running(const char *sname)
@@ -565,9 +585,11 @@ service_running(const char *sname)
 
 	if (asprintf(&cmdstr, SERVICE " %s " STATUS, sname) <= 0) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "asprintf for checking state of %s failed: %s", sname, errorstr);
+			printlog(LOG_ERR, "asprintf for checking state of %s "
+			    "failed: %s", sname, errorstr);
 		else
-			printlog(LOG_ERR, "asprintf for checking state of %s failed.", sname);
+			printlog(LOG_ERR, "asprintf for checking state of %s "
+			    "failed.", sname);
 		return 0;
 	}
 
@@ -610,7 +632,8 @@ make_service(const char *sname)
 	svs = malloc(sizeof(struct service));
 	if (!svs) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "malloc for %s failed:", svs->svname, errorstr);
+			printlog(LOG_ERR, "malloc for %s failed:", svs->svname,
+			    errorstr);
 		else
 			printlog(LOG_ERR, "malloc for %s failed.", svs->svname);
 		return NULL;
@@ -618,21 +641,22 @@ make_service(const char *sname)
 
 	if (asprintf(&svs->svname, "%s", sname) <= 0) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "asprintf for %s failed:", svs->svname, errorstr);
+			printlog(LOG_ERR, "asprintf for %s failed:",
+			    svs->svname, errorstr);
 		else
-			printlog(LOG_ERR, "asprintf for %s failed.", svs->svname);
+			printlog(LOG_ERR, "asprintf for %s failed.",
+			    svs->svname);
 		free(svs);
 		return NULL;
 	}
-
 	SLIST_INIT(&svs->svpids);
 
 	return svs;
 }
 
 /*
- * Get the pids for given process, and fill the structs, emptying the list if it
- * is not empty.
+ * Get the pids for given process, and fill the structs, emptying the
+ * list if it is not empty.
  * Return 0 if process is running and we filled pids, 1 if not.
  */
 static int
@@ -658,7 +682,8 @@ fill_pids(struct service *svs)
 
 	if (asprintf(&cmdstr, SERVICE " %s " STATUS, svs->svname) <= 0) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "asprintf failed: %s", svs->svname, errorstr);
+			printlog(LOG_ERR, "asprintf failed: %s", svs->svname,
+			    errorstr);
 		else
 			printlog(LOG_ERR, "asprintf failed.", svs->svname);
 		return -1;
@@ -668,7 +693,8 @@ fill_pids(struct service *svs)
 	free(cmdstr);
 	if (pp == NULL) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "popen failed: %s", svs->svname, errorstr);
+			printlog(LOG_ERR, "popen failed: %s", svs->svname,
+			    errorstr);
 		else
 			printlog(LOG_ERR, "popen failed.", svs->svname);
 		return -1;
@@ -680,15 +706,16 @@ fill_pids(struct service *svs)
 			return 1;
 		}
 
-		/* Scan the output for a separated list of numbers assuming they are pids.
-		 * We cannot scan for the service's name, as the name might be different
-		 * to the service script name.
-		 * Though we could assume the service name is properly set in its rc script
-		 * and we could thus just parse the script ourselves, exceptions here might
-		 * have the same probability as services with different service and script
-		 * names.
-		 * So we have to skip the first portion up to the "is not running" or "is
-		 * runnind as pid" and assume service(8) returns the right script's output.
+		/* Scan the output for a separated list of numbers assuming
+		 * they are pids.  We cannot scan for the service's name, as
+		 * the name might be different to the service script name.
+		 * Though we could assume the service name is properly set
+		 * in its rc script and we could thus just parse the script
+		 * ourselves, exceptions here might have the same probability
+		 * as services with different service and script names
+		 * So we have to skip the first portion up to the 
+		 * "is not running" or "is runnind as pid" and assume
+		 * service(8) returns the right script's output.
 		 */
 		for (pinputp = strtok_r(pinput, " .,\t\n", &ttmpstr);
 				pinputp;
@@ -698,7 +725,8 @@ fill_pids(struct service *svs)
 				if (pid > 0 && getsid(pid) != -1) {
 					svpid = malloc(sizeof(struct spid));
 					svpid->svpid = pid;
-					SLIST_INSERT_HEAD(&svs->svpids, svpid, next);
+					SLIST_INSERT_HEAD(&svs->svpids, svpid,
+					    next);
 				}
 			}
 		}
@@ -728,9 +756,11 @@ start_service(struct service *svs)
 
 	if (asprintf(&cmdstr, SERVICE " %s " START, svs->svname) <= 0) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "asprintf for executing %s failed: %s", svs->svname, errorstr);
+			printlog(LOG_ERR, "asprintf for executing %s "
+			    "failed: %s", svs->svname, errorstr);
 		else
-			printlog(LOG_ERR, "asprintf for executing %s failed.", svs->svname);
+			printlog(LOG_ERR, "asprintf for executing %s "
+			    "failed.", svs->svname);
 		return -1;
 	}
 
@@ -738,7 +768,8 @@ start_service(struct service *svs)
 	free(cmdstr);
 	if (pp == NULL) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "popen failed: %s", svs->svname, errorstr);
+			printlog(LOG_ERR, "popen failed: %s", svs->svname,
+			    errorstr);
 		else
 			printlog(LOG_ERR, "popen failed.", svs->svname);
 		return -1;
@@ -785,9 +816,11 @@ kqueue_service(struct fscd_cfg *config, struct service *svs)
 			    EV_ENABLE | EV_ONESHOT, NOTE_EXIT, 0, 0);
 		if (kevent(config->kq, &kq_events, 1, NULL, 0, NULL) == -1) {
 			if (strerror_r(errno, errorstr, sizeof errorstr))
-				printlog(LOG_ERR, "Registering kq event failed");
+				printlog(LOG_ERR, "Registering kq event "
+				    "failed");
 			else
-				printlog(LOG_ERR, "Registering kq event failed: %s", errorstr);
+				printlog(LOG_ERR, "Registering kq event "
+				    "failed: %s", errorstr);
 			return -1;
 		}
 	}
@@ -809,7 +842,8 @@ register_service(struct fscd_cfg *config, struct service *svs)
 		if (strerror_r(errno, errorstr, sizeof errorstr))
 			printlog(LOG_ERR, "Getting pids failed");
 		else
-			printlog(LOG_ERR, "Getting pids failed: %s", errorstr);
+			printlog(LOG_ERR, "Getting pids failed: %s",
+			    errorstr);
 		return ret;
 	}
 
@@ -849,8 +883,8 @@ unregister_service(struct fscd_cfg *config, char *svc_name_in)
 }
 
 /*
- * Open the configuration. Read services from that file and start and monitor
- * them if they are not running.
+ * Open the configuration. Read services from that file and start and
+ * monitor them if they are not running.
  */
 static int
 readconf(struct fscd_cfg *config)
@@ -867,7 +901,8 @@ readconf(struct fscd_cfg *config)
 		if (strerror_r(errno, errorstr, sizeof errorstr))
 			printlog(LOG_ERR, "Opening configuration failed");
 		else
-			printlog(LOG_ERR, "Opening configuration failed: %s", errorstr);
+			printlog(LOG_ERR, "Opening configuration failed: %s",
+			    errorstr);
 		return -1;
 	}
 
@@ -885,41 +920,69 @@ readconf(struct fscd_cfg *config)
 				/* Service already running. Just register. */
 				svs = make_service(finput);
 				if (!svs) {
-					printlog(LOG_ERR, "%s could not be built a structure for.", svs->svname);
+					printlog(LOG_ERR, "%s could not be "
+					    "built a structure for.",
+					    svs->svname);
 					ret = -1;
 				} else if ((ret=register_service(config, svs))) {
 					if (ret < 0)
-						printlog(LOG_ERR, "%s could not be monitored.", svs->svname);
+						printlog(LOG_ERR, "%s could "
+						    "not be monitored.",
+						    svs->svname);
 					else
-						printlog(LOG_ERR, "%s could not be monitored. Set %s_enable to YES in %cetc/rc.conf.", svs->svname, svs->svname, '/');
+						printlog(LOG_ERR, "%s could "
+						    "not be monitored. Set "
+						    "%s_enable to YES in "
+						    "%cetc/rc.conf.",
+						    svs->svname, svs->svname,
+						    '/');
 					free(svs);
 				}
 			}
 		} else {
 			if (service_registered(config, finput)) {
-				/* Service already registered. We should not get to this point! */
-				printlog(LOG_ERR, "%s is registered, but not running.", finput);
+				/*
+				 * Service already registered. We should never
+				 * get to this point!
+				 */
+				printlog(LOG_ERR, "%s is registered, but not "
+				    "running.", finput);
 				ret = -1;
 			} else {
-				/* Service not running. Try to start and register it. */
+				/* Service not running. Try to start and register. */
 				svs = make_service(finput);
 				if (!svs) {
-					printlog(LOG_ERR, "%s could not be built a structure for.", svs->svname);
+					printlog(LOG_ERR, "%s could not be "
+					    "built a structure for.", svs->svname);
 					ret = -1;
 				} else if ((ret=start_service(svs))) {
 					if (ret < 0)
-						printlog(LOG_ERR, "%s could not be started.", svs->svname);
+						printlog(LOG_ERR, "%s could "
+						    "not be started.", svs->svname);
 					else
-						printlog(LOG_ERR, "%s could not be started. Set %s_enable to YES in %cetc/rc.conf.", svs->svname, svs->svname, '/');
+						printlog(LOG_ERR, "%s could "
+						    "not be started. Set "
+						    "%s_enable to YES in "
+						    "%cetc/rc.conf.",
+						    svs->svname, svs->svname,
+						    '/');
 					free(svs);
 				} else if ((ret=register_service(config, svs))) {
 					if (ret < 0)
-						printlog(LOG_ERR, "%s could not be monitored.", svs->svname);
+						printlog(LOG_ERR, "%s could "
+						    "not be monitored.",
+						    svs->svname);
 					else
-						printlog(LOG_ERR, "%s could not be monitored. Set %s_enable to YES in %cetc/rc.conf.", svs->svname, svs->svname, '/');
+						printlog(LOG_ERR, "%s could "
+						    "not be monitored. Set "
+						    "%s_enable to YES in "
+						    "%cetc/rc.conf.",
+						    svs->svname, svs->svname,
+						    '/');
 					free(svs);
 				} else {
-					printlog(LOG_INFO, "%s started from config file.", svs->svname);
+					printlog(LOG_INFO, "%s started from "
+					    "config file.", svs->svname);
 				}
 			}
 		}
@@ -952,7 +1015,8 @@ connect_monitor(void *var)
 		if (strerror_r(errno, errorstr, sizeof errorstr))
 			printlog(LOG_ERR, "Creating socket failed.");
 		else
-			printlog(LOG_ERR, "Creating socket failed: %s", errorstr);
+			printlog(LOG_ERR, "Creating socket failed: %s",
+			    errorstr);
 		exit(1);
 	}
 
@@ -963,7 +1027,8 @@ connect_monitor(void *var)
 			if (strerror_r(errno, errorstr, sizeof errorstr))
 				printlog(LOG_ERR, "Deleting socket failed.");
 			else
-				printlog(LOG_ERR, "Deleting socket failed: %s", errorstr);
+				printlog(LOG_ERR, "Deleting socket failed: %s",
+				    errorstr);
 			exit(1);
 		}
 
@@ -972,15 +1037,18 @@ connect_monitor(void *var)
 		if (strerror_r(errno, errorstr, sizeof errorstr))
 				printlog(LOG_ERR, "Binding to socket failed.");
 		else
-			printlog(LOG_ERR, "Binding to socket failed: %s", errorstr);
+			printlog(LOG_ERR, "Binding to socket failed: %s",
+			    errorstr);
 		exit(1);
 	}
 
 	if (chmod(socketname, S_IRWXU) == -1) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "Changing socket permissions failed.");
+			printlog(LOG_ERR, "Changing socket permissions "
+			    "failed.");
 		else
-			printlog(LOG_ERR, "Changing socket permissions failed: %s", errorstr);
+			printlog(LOG_ERR, "Changing socket permissions "
+			    "failed: %s", errorstr);
 		exit(1);
 	}
 
@@ -988,7 +1056,8 @@ connect_monitor(void *var)
 		if (strerror_r(errno, errorstr, sizeof errorstr))
 			printlog(LOG_ERR, "Listening to socket failed.");
 		else
-			printlog(LOG_ERR, "Listening to socket failed: %s", errorstr);
+			printlog(LOG_ERR, "Listening to socket failed: %s",
+			    errorstr);
 		exit(1);
 	}
 
@@ -1002,10 +1071,14 @@ connect_monitor(void *var)
 				break;
 			} else if (errno == EINTR || errno == ECONNABORTED) {
 				if (retries == 0) {
-					if (strerror_r(errno, errorstr, sizeof errorstr))
-						printlog(LOG_ERR, "accept retries exhausted.");
+					if (strerror_r(errno, errorstr,
+					    sizeof errorstr))
+						printlog(LOG_ERR, "accept "
+						    "retries exhausted.");
 					else
-						printlog(LOG_ERR, "accept retries exhausted: %s", errorstr);
+						printlog(LOG_ERR, "accept "
+						    "retries exhausted: %s",
+						    errorstr);
 					exit(1);
 				} else {
 					sleep(1);
@@ -1021,10 +1094,14 @@ connect_monitor(void *var)
 			nbytes = recv(s2, taskstr, sizeof(taskstr), 0);
 			if (nbytes <= 0) {
 				if (nbytes == -1) {
-					if (strerror_r(errno, errorstr, sizeof errorstr))
-						printlog(LOG_ERR, "receiving from client failed.");
+					if (strerror_r(errno, errorstr,
+					    sizeof errorstr))
+						printlog(LOG_ERR, "receiving "
+						    "from client failed.");
 					else
-						printlog(LOG_ERR, "receiving from client failed: %s", errorstr);
+						printlog(LOG_ERR, "receiving "
+						    "from client failed: %s",
+						    errorstr);
 				}
 				done = 1;
 			}
@@ -1065,13 +1142,17 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 		} else {
 			svs = make_service(arglst[1]);
 			if (!svs) {
-				asprintf(&sendstr, "Error building process structure.\n");
+				asprintf(&sendstr, "Error building process "
+				    "structure.\n");
 				status = 1;
-			} else if (!service_running(svs->svname) && start_service(svs)) {
-				asprintf(&sendstr, "Could not start service.\n");
+			} else if (!service_running(svs->svname) &&
+			    start_service(svs)) {
+				asprintf(&sendstr, "Could not start "
+				    "service.\n");
 				status = 1;
 			} else if (register_service(config, svs)) {
-				asprintf(&sendstr, "Could not monitor service.\n");
+				asprintf(&sendstr, "Could not monitor "
+				    "service.\n");
 				status = 1;
 			} else {
 				asprintf(&sendstr, "Monitoring service.\n");
@@ -1088,7 +1169,8 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 	/* disable */
 	} else if (strcmp(arglst[0], "disable") == 0) {
 		if (unregister_service(config, arglst[1])) {
-			asprintf(&sendstr, "Removing service failed: Not found.\n");
+			asprintf(&sendstr, "Removing service failed: "
+			    "Not found.\n");
 			status = 1;
 		} else {
 			asprintf(&sendstr, "Service removed.\n");
@@ -1109,7 +1191,8 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 		send(sock_fd, sendstr, strlen(sendstr), 0);
 		send(sock_fd, &eot, 1, 0);
 		free(sendstr);
-		pthread_mutex_unlock(&config->service_mtx); /* shutdown needs the lock. */
+		/* Shutdown needs the lock. */
+		pthread_mutex_unlock(&config->service_mtx);
 		fscd_shutdown(config, 0);
 		return 0;
 
@@ -1146,8 +1229,8 @@ fscd_shutdown(struct fscd_cfg *config, int exitcode)
 
 /*
  * Handle a signal.
- * XXX: Currently, there's no signal handling except for shutting down on the
- * registered signals. There might be some in the future.
+ * XXX: Currently, there's no signal handling except for shutting
+ * down on the registered signals. There might be some in the future.
  */
 static void
 handle_sig(int sig)
