@@ -69,13 +69,15 @@ static char *socketname = NULL;
 int
 main(int argc, char *argv[])
 {
-	char *sendstr;
-	int error = 0;
-	int ch;
-	int i;
+	int ch, i, update, error;
+	char *sendstr, *tname, buf[80], cname[] = "/etc/fscd.conf";
+	char tmpname[] = "/tmp/tmpXXXXXXXXXX";
+	FILE *cfile, *tfile;
+
+	error = update = 0;
 
 	/* check arguments */
-	while ((ch = getopt(argc, argv, "Vs:")) != -1)
+	while ((ch = getopt(argc, argv, "Vs:w")) != -1)
 		switch (ch) {
 			case 'V':
 				version();
@@ -83,6 +85,9 @@ main(int argc, char *argv[])
 			case 's':
 				if (asprintf(&socketname, "%s", optarg) < 0)
 					err(1, "asprintf");
+				break;
+			case 'w':
+				update = 1;
 				break;
 			default:
 				usage();
@@ -116,8 +121,37 @@ main(int argc, char *argv[])
 			error += daemonconnect(sendstr);
 			free(sendstr);
 		}
+		if (update) {
+			if (strcmp(argv[0], "enable") == 0) {
+				cfile = fopen(cname, "a+");
+				if (cfile != NULL) {
+					if (fputs(argv[1], cfile) == EOF)
+						warnx("Unable to write to configuration");
+					if (fclose(cfile) != 0)
+						warnx("Unable to close configuration file");
+				}
+			} else {
+				tname = mktemp(tmpname);
+				cfile = fopen(cname, "r");
+				tfile = fopen(tname, "w");
+				if ((cfile == NULL) || (tfile == NULL))
+					warnx("Unable to open configuration file");
+				while (fgets(buf, 80, cfile) != NULL) {
+					if (strncmp(buf, argv[1], strlen(argv[1])) == 0) {
+						continue;
+					} else {
+						if (fputs(buf, tfile) == EOF)
+							warnx("Unable to write configuration");
+					}
+				}
+			}
+			if ((fclose(cfile) != 0) || (fclose(tfile) != 0))
+				warnx("Unable to close configuration file");
+			rename(tname, cname);
+		}
+
 	} else {
-		warnx("unknown command: %s", argv[0]);
+		warnx("unknown option: %s", argv[0]);
 		usage();
 	}
 
@@ -137,7 +171,8 @@ usage(void)
 			"\n"
 			"options:\n"
 			"        -V   Print out version.\n"
-			"        -s S Use socket S instead of standard.\n" );
+			"        -s S Use socket S instead of the default.\n"
+			"        -w   Write the status change to fscd.conf\n");
 	exit(EX_USAGE);
 }
 
