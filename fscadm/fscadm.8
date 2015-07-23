@@ -35,8 +35,10 @@
 .Nm
 .Ar close
 .Nm
+.Op Fl w
 .Ar disable Ar service
 .Nm
+.Op Fl w
 .Ar enable Ar service Ar pidfile
 .Nm
 .Ar shutdown
@@ -68,6 +70,12 @@ only supports services which may be monitored through a
 and have a corresponding
 .Xr rc 8
 control script.
+.Pp
+When the
+.Fl w
+option is specified
+.Nm
+will attempt to write the enable|disable changes to disk.
 The following options are available:
 .Bl -tag -width ".Cm shutdown"
 .It Cm close
