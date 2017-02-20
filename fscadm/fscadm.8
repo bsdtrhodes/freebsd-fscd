@@ -55,9 +55,9 @@ currently being monitored or cleanly shutdown
 the services control daemon,
 .Xr fscd 8 .
 .Pp
-When invoked
+When invoked, the
 .Nm
-will connect with the
+utility will connect with the
 .Xr fscd 8
 daemon and carry out the requested actions.
 Changes in service states will not be propagated to the
@@ -75,7 +75,7 @@ When the
 .Fl w
 option is specified
 .Nm
-will attempt to write the enable|disable changes to disk.
+will attempt to write the enable or disable changes to disk.
 The following options are available:
 .Bl -tag -width ".Cm shutdown"
 .It Cm close

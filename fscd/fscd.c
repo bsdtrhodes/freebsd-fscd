@@ -48,6 +48,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/user.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
@@ -83,7 +84,7 @@ __FBSDID("$FreeBSD$");
 #define SERVICE "service"
 #define STATUS "onestatus"
 #define START "restart" // restart is more reliable than just start.
-#define VERSION "1.1"
+#define VERSION "1.2"
 
 struct spid {
 	pid_t svpid;
@@ -130,7 +131,7 @@ static void handle_queue(struct fscd_cfg *, struct kevent *);
 static void handle_sig(int);
 static void ignore_sig(int);
 static void printlog(int, const char *, ...);
-static int process_exited(const int, const struct service *);
+static int process_exited(const int);
 static int service_registered(struct fscd_cfg *, const char *);
 static int service_running(const char *);
 static struct service *make_service(const char *);
@@ -186,7 +187,7 @@ main(int argc, char *argv[])
 		warn("cannot stat configuration");
 	if (stat(socketname, &nb_stat) == 0) {
 		if (!force)
-			err(1, "socket exists, specify f to overwrite");
+			err(1, "socket exists, specify -f to overwrite");
 		else if (unlink(socketname) == -1)
 			err(1, "deleting old socket");
 	}
@@ -195,12 +196,12 @@ main(int argc, char *argv[])
 	if ((pfh = pidfile_open(NULL, 0644, NULL)) == NULL)
 		err(1, "pidfile_open");
 #endif
-/*
+
 	if (debug)
 		printf("Debug mode. Not daemonizing.\n");
 	else if (daemon(0, 0) == -1)
 		err(1, "daemon");
-*/
+
 #if defined(__FreeBSD__)
 	if (pidfile_write(pfh) == -1)
 		err(1, "pidfile_write");
@@ -271,7 +272,7 @@ handle_queue(struct fscd_cfg *config, struct kevent *kq_events)
 					printlog(LOG_ERR, "%s caught signal %d"
 					    " and exited", svs->svname,
 					    WTERMSIG(status));
-					pretcode = process_exited(status, svs);
+					pretcode = process_exited(status);
 				} else if (WIFEXITED(status)) {
 					printlog(LOG_ERR, "%s exited with "
 					    "status %d",
@@ -309,7 +310,7 @@ handle_queue(struct fscd_cfg *config, struct kevent *kq_events)
  * to be user-issued, return 0, 1 otherwise.
  */
 static int
-process_exited(int status, const struct service *svs)
+process_exited(int status)
 {
 	switch (WTERMSIG(status)) {
 		case SIGINT:

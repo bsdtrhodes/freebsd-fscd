@@ -117,7 +117,6 @@ main(int argc, char *argv[])
 				warn("asprintf");
 				continue;
 			}
-
 			error += daemonconnect(sendstr);
 			free(sendstr);
 		}
@@ -193,10 +192,13 @@ version(void)
 int
 daemonconnect(char *task)
 {
-	int s, len, nbytes, retcode = 1, total = 0;
+	int s, len, nbytes, retcode, total;
 	struct sockaddr_un remote;
 	char recdata[LINE_MAX];
 	char *ptr;
+
+	retcode = 1;
+	total = 0;
 
 	if ((s = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1)
 		err(EX_OSERR, "socket");
@@ -205,6 +207,7 @@ daemonconnect(char *task)
 	strncpy(remote.sun_path, socketname ? socketname : SOCK_PATH,
 			sizeof remote.sun_path);
 	len = strlen(remote.sun_path) + sizeof(remote.sun_family) + 1;
+
 	if (connect(s, (struct sockaddr *)&remote, len) == -1)
 		err(EX_OSERR, "connect");
 
