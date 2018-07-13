@@ -120,7 +120,7 @@ static int daemonize = 0;
 static char *socketname = NULL;
 static char *conffile = NULL;
 
-static void fscd_shutdown(struct fscd_cfg *, int);
+static void fscd_shutdown(int);
 static int readconf(struct fscd_cfg *);
 static int print_status(struct fscd_cfg *, int);
 static int handle_restart(struct fscd_cfg *, char *);
@@ -1225,9 +1225,13 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 		send(sock_fd, sendstr, strlen(sendstr), 0);
 		send(sock_fd, &eot, 1, 0);
 		free(sendstr);
-		/* Shutdown needs the lock. */
+		/* We already have the lock, shutdown. */
+		fscd_shutdown(0);
+		/*
+		 * We should never get here, but the unlock helps
+		 * -Wthread-safety-analysis
+		 */
 		pthread_mutex_unlock(&config->service_mtx);
-		fscd_shutdown(config, 0);
 		return 0;
 
 	/* status */
@@ -1246,12 +1250,9 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
  * Empty the list, free all services, close the kqueue, and unlink socket.
  */
 static void
-fscd_shutdown(struct fscd_cfg *config, int exitcode)
+fscd_shutdown(int exitcode)
 {
 	printlog(LOG_INFO, "fscd shutdown requested.");
-	/* We want to wait for any pending requests to finish. */
-	if (config)
-		pthread_mutex_lock(&config->service_mtx);
 	(void)unlink(socketname);
 
 #if defined(__FreeBSD__)
@@ -1270,7 +1271,7 @@ static void
 handle_sig(int sig)
 {
 	sig = 1;
-	fscd_shutdown(NULL, sig);
+	fscd_shutdown(sig);
 }
 
 /*
