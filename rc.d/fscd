@@ -15,8 +15,13 @@
 name="fscd"
 desc="FreeBSD Services Control Daemon"
 rcvar="fscd_enable"
-command="/usr/sbin/${name}"
+command="/usr/local/sbin/${name}"
 pidfile="/var/run/${name}.pid"
+required_files="/usr/local/etc/$name.conf"
 
 load_rc_config $name
+: ${fscd_enable="NO"}
+: ${fscd_flags=""}
+command_args="-d"
+
 run_rc_command "$1"
