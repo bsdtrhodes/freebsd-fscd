@@ -130,6 +130,7 @@ main(int argc, char *argv[])
 						warnx("Unable to close configuration file");
 				}
 			} else {
+				/* XXXTR: Rewrite block to safely use temp files */
 				tname = mktemp(tmpname);
 				cfile = fopen(cname, "r");
 				tfile = fopen(tname, "w");

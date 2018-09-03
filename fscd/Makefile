@@ -9,7 +9,7 @@ CONF=	fscd.conf
 DPADD=	${LIBKVM}
 LDADD=	-lkvm -lpthread -lutil
 
-WARNS=	9
+WARNS=	2
 
 #CFLAGS+=	-std=c99 -g -O0
 CFLAGS+=	-std=c99

@@ -25,7 +25,7 @@
 .\"
 .\" $Id: fscd.8 2063 2013-06-03 14:03:41Z bsdtrhodes $
 .\"
-.Dd March 15, 2012
+.Dd September 03, 2018
 .Dt FSCD 8
 .Os
 .Sh NAME
@@ -33,22 +33,29 @@
 .Nd "service state monitoring daemon"
 .Sh SYNOPSIS
 .Nm
-.Op Fl Vvf
+.Op Fl dfVv
 .Op Fl s Ar socket
 .Op Fl c Ar file
 .Sh DESCRIPTION
+The
 .Nm
 .Fx ,
-service control daemon, is a daemon which monitors states of services and
-restarts them if they die.
+service control daemon, is a service which monitors states of other services and
+attempts to restart them if they die.
 .Pp
 When invoked, the
 .Nm
-utility will check for services listed in its configuration file and create a
-socket to listen for messages from
-.Xr fscadm 8 , (
+utility will check for services listed in its configuration file,
+.Pa /etc/fscd.conf
+and create a socket to listen for messages from
+.Xr fscadm 8 ,
 .Fx
-services control administration utility), the control program for fscd.
+the services control administration utility.
+The
+.Xr fscadm 8
+utility will allow for the addition or removal of services from the
+.Xr fscd 8
+internal monitoring list.
 .Pp
 When monitored services terminate, they will be restarted, and a notification
 will be logged to the
@@ -98,6 +105,17 @@ SIGKILL
 .El
 .Sh OPTIONS
 .Bl -tag
+.It Fl d
+Run
+.Nm
+in the background as a deamon.
+The default is to run in the foreground to show service start messages
+on the screen.
+.It Fl f
+Force, if the socket already exists, delete it.
+This can occur if
+.Nm
+is already running or was not properly shut down before.
 .It Fl V
 Print out the version of
 .Nm
@@ -106,11 +124,6 @@ and exit.
 Verbose, don't fork to background and don't log to
 .Xr syslog 3
 but to console.
-.It Fl f
-Force, if the socket already exists, delete it.
-This can occur if
-.Nm
-is already running or was not properly shut down before.
 .It Fl s Ar socket
 Use socket
 .Ar socket
@@ -143,12 +156,9 @@ name of the configuration file
 .Xr service 8 ,
 .Xr syslog 8
 .Sh HISTORY
+The
 .Nm
-utility first appeared in
-.Fx 10.0
-as part of the
-.Fx
-service control utilities.
+utility is available in both the ports collection and github. 
 .Sh AUTHORS
 The
 .Nm fsc
