@@ -25,7 +25,7 @@ start_cmd=fscd_start
 
 fscd_start()
 {
-	/usr/sbin/daemon -cf ${command}
+	/usr/sbin/daemon -cf ${command} ${fscd_flags}
 }
 
 run_rc_command "$1"
