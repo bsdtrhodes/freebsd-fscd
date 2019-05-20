@@ -34,6 +34,7 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl dfVv
+.Op Fl p Ar pidfile
 .Op Fl s Ar socket
 .Op Fl c Ar file
 .Sh DESCRIPTION
@@ -124,6 +125,11 @@ and exit.
 Verbose, don't fork to background and don't log to
 .Xr syslog 3
 but to console.
+.It Fl p Ar pidfile
+Use alternative
+.Ar pidfile
+pid file instead of the standard
+.Pa /var/run/fscd.pid .
 .It Fl s Ar socket
 Use socket
 .Ar socket
