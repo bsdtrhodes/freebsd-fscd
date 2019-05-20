@@ -118,6 +118,7 @@ struct restart_params {
 
 static int daemonize = 0;
 static char *socketname = NULL;
+static char *pidfilename = NULL;
 static char *conffile = NULL;
 
 static void fscd_shutdown(int);
@@ -156,7 +157,7 @@ main(int argc, char *argv[])
 	int verbosity = 0;
 
 	/* check arguments */
-	while ((ch = getopt(argc, argv, "Vdvfs:c:")) != -1)
+	while ((ch = getopt(argc, argv, "Vdvfp:s:c:")) != -1)
 		switch (ch) {
 			case 'V': /* Print version string. */
 				version();
@@ -173,6 +174,10 @@ main(int argc, char *argv[])
 				break;
 			case 'f': /* Force overwrite. */
 				force = 1;
+				break;
+			case 'p': /* Change pidfile. */
+				if (asprintf(&pidfilename, "%s", optarg) <= 0)
+					err(1, "asprintf");
 				break;
 			case 's': /* Change socketname. */
 				if (asprintf(&socketname, "%s", optarg) <= 0)
@@ -215,7 +220,7 @@ main(int argc, char *argv[])
 	}
 
 #if defined(__FreeBSD__)
-	if ((pfh = pidfile_open(NULL, 0644, NULL)) == NULL)
+	if ((pfh = pidfile_open(pidfilename, 0644, NULL)) == NULL)
 		err(1, "pidfile_open");
 #endif
 
