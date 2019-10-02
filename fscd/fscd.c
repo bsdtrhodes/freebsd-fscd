@@ -360,15 +360,15 @@ static int
 handle_restart(struct fscd_cfg *config, char *sname)
 {
 	int ret;
-	struct service *svs;
-	struct spid *svpid;
+	struct service *svs, *svs_tmp;
+	struct spid *svpid, *svpid_tmp;
 
-	SLIST_FOREACH(svs, &config->service_list, next) {
+	SLIST_FOREACH_SAFE(svs, &config->service_list, next, svs_tmp) {
 		if (strcmp(svs->svname, sname) != 0)
 			continue;
 
 		/* Remove all pids. */
-		SLIST_FOREACH(svpid, &svs->svpids, next) {
+		SLIST_FOREACH_SAFE(svpid, &svs->svpids, next, svpid_tmp) {
 			SLIST_REMOVE(&svs->svpids, svpid, spid, next);
 			free(svpid);
 		}
@@ -418,18 +418,18 @@ static void *
 wait_restart(void *var)
 {
 	struct restart_params *inputv;
-	struct service *svs;
-	struct spid *svpid;
+	struct service *svs, *svs_tmp;
+	struct spid *svpid, *svpid_tmp;
 	int retries;
 
 	inputv = var;
 	for (retries = 6; retries >= 0; retries--) {
-		SLIST_FOREACH(svs, &inputv->config->service_list, next) {
+		SLIST_FOREACH_SAFE(svs, &inputv->config->service_list, next, svs_tmp) {
 			if (strcmp(svs->svname, inputv->sname) != 0)
 				continue;
 
 			/* Remove all pids. */
-			SLIST_FOREACH(svpid, &svs->svpids, next) {
+			SLIST_FOREACH_SAFE(svpid, &svs->svpids, next, svpid_tmp) {
 				SLIST_REMOVE(&svs->svpids, svpid, spid, next);
 				free(svpid);
 			}
@@ -696,7 +696,7 @@ make_service(const char *sname)
 static int
 fill_pids(struct service *svs)
 {
-	struct spid *svpid;
+	struct spid *svpid, *svpid_tmp;
 	char *cmdstr;
 	char *tmpstr, *ttmpstr;
 	char *pinputp;
@@ -708,7 +708,7 @@ fill_pids(struct service *svs)
 
 	/* Empty list. */
 	if (!SLIST_EMPTY(&svs->svpids)) {
-		SLIST_FOREACH(svpid, &svs->svpids, next) {
+		SLIST_FOREACH_SAFE(svpid, &svs->svpids, next, svpid_tmp) {
 			SLIST_REMOVE(&svs->svpids, svpid, spid, next);
 			free(svpid);
 		}
@@ -888,14 +888,14 @@ register_service(struct fscd_cfg *config, struct service *svs)
 static int
 unregister_service(struct fscd_cfg *config, char *svc_name_in)
 {
-	struct spid *svpid;
-	struct service *svs;
+	struct spid *svpid, *svpid_tmp;
+	struct service *svs, *svs_tmp;
 	int ret = 1;
 
-	SLIST_FOREACH(svs, &config->service_list, next)
+	SLIST_FOREACH_SAFE(svs, &config->service_list, next, svs_tmp)
 		if (strcmp(svs->svname, svc_name_in) == 0) {
 			SLIST_REMOVE(&config->service_list, svs, service, next);
-			SLIST_FOREACH(svpid, &svs->svpids, next) {
+			SLIST_FOREACH_SAFE(svpid, &svs->svpids, next, svpid_tmp) {
 				SLIST_REMOVE(&svs->svpids, svpid, spid, next);
 				free(svpid);
 			}
