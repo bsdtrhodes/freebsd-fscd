@@ -164,7 +164,7 @@ main(int argc, char *argv[])
 void
 usage(void)
 {
-	printf( "usage:  fscadm enable <service> [service ...]\n"
+	printf("usage:  fscadm enable <service> [service ...]\n"
 			"        fscadm disable <service> [service ...]\n"
 			"        fscadm shutdown\n"
 			"        fscadm status\n"

@@ -15,9 +15,9 @@ WARNS=	2
 CFLAGS+=	-std=c99
 
 install:
-	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd /usr/sbin/
+	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd /usr/local/sbin/
 	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.conf.5 /usr/share/man/man5/
-	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.8 /usr/share/man/man8/
-	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.conf /etc/
+	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.8 /usr/local/man/man8/
+	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.conf /usr/local/etc/
 
 .include <bsd.prog.mk>

@@ -4,7 +4,7 @@
 
 FILES=	fscd
 
-FILESDIR=	/etc/rc.d
+FILESDIR=	/usr/local/etc/rc.d
 FILESMODE=	${BINMODE}
 
 .include <bsd.prog.mk>

@@ -8,8 +8,7 @@ MAN=	fscadm.8
 WARNS?=	2
 
 install:
-	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscadm /usr/bin/
-	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscadm.8.gz /usr/share/man/man8/
-
+	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscadm /usr/local/bin/
+	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscadm.8.gz /usr/local/man/man8/
 
 .include <bsd.prog.mk>
