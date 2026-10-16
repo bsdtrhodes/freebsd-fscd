@@ -135,7 +135,7 @@ main(int argc, char *argv[])
 						    "configuration file");
 				}
 			} else {
-				int tfd;
+				int tfd, ffailed;
 				char tmpname[] = "/tmp/fscd.conf.XXXXXX";
 				struct stat st;
 
@@ -164,15 +164,24 @@ main(int argc, char *argv[])
 							warnx("Unable to write "
 							    "configuration");
 					}
-					if (fclose(cfile) != 0)
+					ffailed = 0;
+					if (fclose(cfile) != 0) {
 						warnx("Unable to close "
 						    "configuration file");
-					if (fclose(tfile) != 0)
+						ffailed = 1;
+					}
+					if (fclose(tfile) != 0) {
 						warnx("Unable to close "
+						    "temporary configuration file");
+						ffailed = 1;
+					}
+					if (ffailed) {
+						unlink(tmpname);
+					} else if (rename(tmpname, cname) != 0) {
+						warn("Unable to rename "
 						    "configuration file");
-					if (rename(tmpname, cname) != 0)
-						warnx("Unable to rename "
-						    "configuration file");
+						unlink(tmpname);
+					}
 				}
 			}
 		} else if (update) {
