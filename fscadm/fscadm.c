@@ -70,8 +70,7 @@ int
 main(int argc, char *argv[])
 {
 	int ch, i, update, error;
-	char *sendstr, *tname, buf[80], cname[] = "/etc/fscd.conf";
-	char tmpname[] = "/tmp/tmpXXXXXXXXXX";
+	char *sendstr, buf[80], cname[] = "/etc/fscd.conf";
 	FILE *cfile, *tfile;
 
 	error = update = 0;
@@ -120,34 +119,64 @@ main(int argc, char *argv[])
 			error += daemonconnect(sendstr);
 			free(sendstr);
 		}
-		if (update) {
+		if (update && argc > 1) {
 			if (strcmp(argv[0], "enable") == 0) {
-				cfile = fopen(cname, "a+");
-				if (cfile != NULL) {
-					if (fputs(argv[1], cfile) == EOF)
-						warnx("Unable to write to configuration");
+				cfile = fopen(cname, "a");
+				if (cfile == NULL) {
+					warnx("Unable to open configuration file");
+				} else {
+					for (i = 1; i < argc; i++)
+						if (fprintf(cfile, "%s\n",
+						    argv[i]) < 0)
+							warnx("Unable to write to "
+							    "configuration");
 					if (fclose(cfile) != 0)
-						warnx("Unable to close configuration file");
+						warnx("Unable to close "
+						    "configuration file");
 				}
 			} else {
-				/* XXXTR: Rewrite block to safely use temp files */
-				tname = mktemp(tmpname);
-				cfile = fopen(cname, "r");
-				tfile = fopen(tname, "w");
-				if ((cfile == NULL) || (tfile == NULL))
+				int tfd;
+				char tmpname[] = "/tmp/fscd.conf.XXXXXX";
+				struct stat st;
+
+				cfile = tfile = NULL;
+				if ((tfd = mkstemp(tmpname)) == -1) {
+					warnx("Unable to create temporary file");
+				} else if ((tfile = fdopen(tfd, "w")) == NULL) {
+					warnx("Unable to open temporary file");
+					close(tfd);
+					unlink(tmpname);
+				} else if ((cfile = fopen(cname, "r")) == NULL) {
 					warnx("Unable to open configuration file");
-				while (fgets(buf, 80, cfile) != NULL) {
-					if (strncmp(buf, argv[1], strlen(argv[1])) == 0) {
-						continue;
-					} else {
+					fclose(tfile);
+					unlink(tmpname);
+				} else {
+					/* Keep the original file's mode. */
+					if (stat(cname, &st) == 0)
+						(void)fchmod(fileno(tfile),
+						    st.st_mode & 07777);
+					while (fgets(buf, sizeof(buf),
+					    cfile) != NULL) {
+						if (strncmp(buf, argv[1],
+						    strlen(argv[1])) == 0)
+							continue;
 						if (fputs(buf, tfile) == EOF)
-							warnx("Unable to write configuration");
+							warnx("Unable to write "
+							    "configuration");
 					}
+					if (fclose(cfile) != 0)
+						warnx("Unable to close "
+						    "configuration file");
+					if (fclose(tfile) != 0)
+						warnx("Unable to close "
+						    "configuration file");
+					if (rename(tmpname, cname) != 0)
+						warnx("Unable to rename "
+						    "configuration file");
 				}
 			}
-			if ((fclose(cfile) != 0) || (fclose(tfile) != 0))
-				warnx("Unable to close configuration file");
-			rename(tname, cname);
+		} else if (update) {
+			warnx("No service name given to update");
 		}
 
 	} else {
@@ -205,8 +234,8 @@ daemonconnect(char *task)
 		err(EX_OSERR, "socket");
 
 	remote.sun_family = PF_LOCAL;
-	strncpy(remote.sun_path, socketname ? socketname : SOCK_PATH,
-			sizeof remote.sun_path);
+	strlcpy(remote.sun_path, socketname ? socketname : SOCK_PATH,
+	    sizeof(remote.sun_path));
 	len = strlen(remote.sun_path) + sizeof(remote.sun_family) + 1;
 
 	if (connect(s, (struct sockaddr *)&remote, len) == -1)

@@ -148,7 +148,7 @@ static int kqueue_service(struct fscd_cfg *, struct service *);
 int
 main(int argc, char *argv[])
 {
-	int monthrint, newevent, ch, force = 0;
+	int newevent, ch, force = 0;
 	struct fscd_cfg config;
 	struct service svs;
 	struct kevent kq_events;
@@ -239,6 +239,8 @@ main(int argc, char *argv[])
 	memset(&svs, 0, sizeof(svs));
 	SLIST_INIT(&config.service_list);
 	config.kq = kqueue();
+	if (config.kq == -1)
+		err(1, "kqueue");
 	if (pthread_mutex_init(&config.service_mtx, NULL))
 		err(1, "pthread_mutex_init");
 
@@ -257,8 +259,9 @@ main(int argc, char *argv[])
 
 	printlog(LOG_NOTICE, "Starting.");
 
-	monthrint = pthread_create(&(config.service_thr), NULL,
-	    connect_monitor, &config);
+	if (pthread_create(&(config.service_thr), NULL, connect_monitor,
+	    &config) != 0)
+		err(1, "pthread_create");
 
 	/* Read configuration */
 	readconf(&config);
@@ -286,48 +289,60 @@ static void
 handle_queue(struct fscd_cfg *config, struct kevent *kq_events)
 {
 	int status, pretcode;
-	struct service *svs;
+	struct service *svs, *svs_found = NULL;
 	struct spid *svpid;
 
 	if (! (kq_events->fflags & NOTE_EXIT))
 		return;
 
 	pthread_mutex_lock(&config->service_mtx);
+
+	/*
+	 * Locate the service owning the pid that exited.  Find it first and
+	 * take action afterwards: handle_restart() and unregister_service()
+	 * may free the service and its pid nodes, so we must not still be
+	 * iterating the lists when they run.
+	 */
 	SLIST_FOREACH(svs, &config->service_list, next) {
 		SLIST_FOREACH(svpid, &svs->svpids, next) {
 			if (kq_events->ident == (uintptr_t)svpid->svpid) {
-				status = kq_events->data;
-				if (WIFSIGNALED(status)) {
-					printlog(LOG_ERR, "%s caught signal %d"
-					    " and exited", svs->svname,
-					    WTERMSIG(status));
-					pretcode = process_exited(status);
-				} else if (WIFEXITED(status)) {
-					printlog(LOG_ERR, "%s exited with "
-					    "status %d",
-					    svs->svname, WEXITSTATUS(status));
-					pretcode = 0;
-				} else {
-					continue;
-				}
-
-				if (pretcode == 1 && handle_restart(config,
-				    svs->svname) == 0) {
-					printlog(LOG_ERR, "%s was restarted",
-					    svs->svname);
-				} else if (pretcode == 0 && handle_waiting(config,
-				    svs->svname) == 0) {
-					printlog(LOG_ERR, "%s waiting for restart.",
-					    svs->svname);
-				} else {
-					printlog(LOG_ERR, "%s failed to restart.",
-							svs->svname);
-					printlog(LOG_ERR, "%s removed from monitoring.",
-							svs->svname);
-					unregister_service(config, svs->svname);
-				}
+				svs_found = svs;
+				break;
 			}
 		}
+		if (svs_found != NULL)
+			break;
+	}
+
+	if (svs_found == NULL) {
+		pthread_mutex_unlock(&config->service_mtx);
+		return;
+	}
+
+	status = kq_events->data;
+	if (WIFSIGNALED(status)) {
+		printlog(LOG_ERR, "%s caught signal %d and exited",
+		    svs_found->svname, WTERMSIG(status));
+		pretcode = process_exited(status);
+	} else if (WIFEXITED(status)) {
+		printlog(LOG_ERR, "%s exited with status %d",
+		    svs_found->svname, WEXITSTATUS(status));
+		pretcode = 0;
+	} else {
+		pthread_mutex_unlock(&config->service_mtx);
+		return;
+	}
+
+	if (pretcode == 1 && handle_restart(config, svs_found->svname) == 0) {
+		printlog(LOG_ERR, "%s was restarted", svs_found->svname);
+	} else if (pretcode == 0 &&
+	    handle_waiting(config, svs_found->svname) == 0) {
+		printlog(LOG_ERR, "%s waiting for restart.", svs_found->svname);
+	} else {
+		printlog(LOG_ERR, "%s failed to restart.", svs_found->svname);
+		printlog(LOG_ERR, "%s removed from monitoring.",
+		    svs_found->svname);
+		unregister_service(config, svs_found->svname);
 	}
 	pthread_mutex_unlock(&config->service_mtx);
 
@@ -406,8 +421,16 @@ handle_waiting(struct fscd_cfg *config, char *sname)
 	struct restart_params *inputv;
 
 	inputv = malloc(sizeof(struct restart_params));
+	if (inputv == NULL) {
+		printlog(LOG_ERR, "Could not allocate restart parameters.");
+		return -1;
+	}
 	inputv->config = config;
-	inputv->sname = strdup(sname);
+	if ((inputv->sname = strdup(sname)) == NULL) {
+		printlog(LOG_ERR, "Could not allocate restart parameters.");
+		free(inputv);
+		return -1;
+	}
 	return pthread_create(&tmpthr, NULL, wait_restart, inputv);
 }
 
@@ -418,24 +441,24 @@ static void *
 wait_restart(void *var)
 {
 	struct restart_params *inputv;
-	struct service *svs, *svs_tmp;
-	struct spid *svpid, *svpid_tmp;
-	int retries;
+	struct service *svs;
+	int retries, found;
 
 	inputv = var;
 	for (retries = 6; retries >= 0; retries--) {
-		SLIST_FOREACH_SAFE(svs, &inputv->config->service_list, next, svs_tmp) {
+		found = 0;
+		/*
+		 * Traverse the service list under the mutex.  fill_pids()
+		 * frees and rebuilds the pid list, so the operation must be
+		 * done with the lock held; it is dropped only while sleeping.
+		 */
+		pthread_mutex_lock(&inputv->config->service_mtx);
+		SLIST_FOREACH(svs, &inputv->config->service_list, next) {
 			if (strcmp(svs->svname, inputv->sname) != 0)
 				continue;
 
-			/* Remove all pids. */
-			SLIST_FOREACH_SAFE(svpid, &svs->svpids, next, svpid_tmp) {
-				SLIST_REMOVE(&svs->svpids, svpid, spid, next);
-				free(svpid);
-			}
-
-			/* Wait for 100 seconds for the service to restart. */
-			pthread_mutex_lock(&inputv->config->service_mtx);
+			found = 1;
+			/* Wait for the service to restart on its own. */
 			if (!fill_pids(svs)) {
 				if (kqueue_service(inputv->config, svs))
 					printlog(LOG_ERR, "Could not monitor "
@@ -449,10 +472,10 @@ wait_restart(void *var)
 				free(inputv);
 				return NULL;
 			}
-			pthread_mutex_unlock(&inputv->config->service_mtx);
 			break;
 		}
-		if (!svs) {
+		pthread_mutex_unlock(&inputv->config->service_mtx);
+		if (!found) {
 			printlog(LOG_ERR, "Service %s was removed from "
 			    "monitoring while I was waiting for it to restart.",
 			    inputv->sname);
@@ -462,17 +485,24 @@ wait_restart(void *var)
 		}
 		sleep(10);
 	}
-	printlog(LOG_ERR, "Service %s was not restarted. Doing it myself.",
-	    svs->svname);
+
+	/*
+	 * The service did not come back on its own.  Look it up again under
+	 * the lock (it may have been removed while we slept) and restart it.
+	 */
 	pthread_mutex_lock(&inputv->config->service_mtx);
-	if (handle_restart(inputv->config, svs->svname) == 0) {
-		printlog(LOG_ERR, "%s was restarted",
-			svs->svname);
+	svs = NULL;
+	SLIST_FOREACH(svs, &inputv->config->service_list, next)
+		if (strcmp(svs->svname, inputv->sname) == 0)
+			break;
+	if (svs == NULL) {
+		printlog(LOG_ERR, "Service %s was removed from monitoring "
+		    "while I was waiting for it to restart.", inputv->sname);
+	} else if (handle_restart(inputv->config, svs->svname) == 0) {
+		printlog(LOG_ERR, "%s was restarted", svs->svname);
 	} else {
-		printlog(LOG_ERR, "%s failed to restart.",
-				svs->svname);
-		printlog(LOG_ERR, "%s removed from monitoring.",
-				svs->svname);
+		printlog(LOG_ERR, "%s failed to restart.", svs->svname);
+		printlog(LOG_ERR, "%s removed from monitoring.", svs->svname);
 		unregister_service(inputv->config, svs->svname);
 	}
 	pthread_mutex_unlock(&inputv->config->service_mtx);
@@ -629,7 +659,8 @@ service_running(const char *sname)
 
 	retcode = system(cmdstr);
 	free(cmdstr);
-	if (WEXITSTATUS(retcode))
+	if (retcode == -1 || !WIFEXITED(retcode) ||
+	    WEXITSTATUS(retcode) != 0)
 		return 0;
 	else
 		return 1;
@@ -666,20 +697,20 @@ make_service(const char *sname)
 	svs = malloc(sizeof(struct service));
 	if (!svs) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "malloc for %s failed:", svs->svname,
-			    errorstr);
+			printlog(LOG_ERR, "malloc for %s failed.", sname);
 		else
-			printlog(LOG_ERR, "malloc for %s failed.", svs->svname);
+			printlog(LOG_ERR, "malloc for %s failed: %s",
+			    sname, errorstr);
 		return NULL;
 	}
+	svs->svname = NULL;
 
 	if (asprintf(&svs->svname, "%s", sname) <= 0) {
 		if (strerror_r(errno, errorstr, sizeof errorstr))
-			printlog(LOG_ERR, "asprintf for %s failed:",
-			    svs->svname, errorstr);
+			printlog(LOG_ERR, "asprintf for %s failed.", sname);
 		else
-			printlog(LOG_ERR, "asprintf for %s failed.",
-			    svs->svname);
+			printlog(LOG_ERR, "asprintf for %s failed: %s",
+			    sname, errorstr);
 		free(svs);
 		return NULL;
 	}
@@ -767,9 +798,9 @@ fill_pids(struct service *svs)
 	}
 
 	retcode = pclose(pp);
-	if (WEXITSTATUS(retcode)) {
+	if (retcode == -1 || !WIFEXITED(retcode) ||
+	    WEXITSTATUS(retcode) != 0)
 		return -1;
-	}
 
 	return 0;
 }
@@ -817,9 +848,9 @@ start_service(struct service *svs)
 	}
 	retcode = pclose(pp);
 
-	if (WEXITSTATUS(retcode)) {
+	if (retcode == -1 || !WIFEXITED(retcode) ||
+	    WEXITSTATUS(retcode) != 0)
 		return -1;
-	}
 
 	/* Refresh our stored pid and re-register with kqueue. */
 	ret = -1;
@@ -947,8 +978,7 @@ readconf(struct fscd_cfg *config)
 				svs = make_service(finput);
 				if (!svs) {
 					printlog(LOG_ERR, "%s could not be "
-					    "built a structure for.",
-					    svs->svname);
+					    "built a structure for.", finput);
 					ret = -1;
 				} else if ((ret=register_service(config, svs))) {
 					if (ret < 0)
@@ -983,7 +1013,7 @@ readconf(struct fscd_cfg *config)
 				svs = make_service(finput);
 				if (!svs) {
 					printlog(LOG_ERR, "%s could not be "
-					    "built a structure for.", svs->svname);
+					    "built a structure for.", finput);
 					ret = -1;
 				} else if ((ret=start_service(svs))) {
 					if (ret < 0)
@@ -1061,7 +1091,11 @@ connect_monitor(void *var)
 	}
 
 	local.sun_family = PF_LOCAL;
-	strcpy(local.sun_path, socketname);
+	if (strlcpy(local.sun_path, socketname, sizeof(local.sun_path))
+	    >= sizeof(local.sun_path)) {
+		printlog(LOG_ERR, "Socket path too long.");
+		exit(1);
+	}
 	if (unlink(local.sun_path) == -1)
 		if (errno != ENOENT) {
 			if (strerror_r(errno, errorstr, sizeof errorstr))
@@ -1131,7 +1165,7 @@ connect_monitor(void *var)
 
 		done = 0;
 		do {
-			nbytes = recv(s2, taskstr, sizeof(taskstr), 0);
+			nbytes = recv(s2, taskstr, sizeof(taskstr) - 1, 0);
 			if (nbytes <= 0) {
 				if (nbytes == -1) {
 					if (strerror_r(errno, errorstr,
@@ -1144,6 +1178,7 @@ connect_monitor(void *var)
 						    errorstr);
 				}
 				done = 1;
+				break;
 			}
 
 			taskstr[nbytes] = '\0';
@@ -1160,7 +1195,7 @@ connect_monitor(void *var)
 static int
 handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 {
-	char *arglst[2], **iter;
+	char *arglst[2] = { NULL, NULL }, **iter;
 	char *sendstr;
 	struct service *svs;
 	char eot = 4;
@@ -1173,6 +1208,25 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 	}
 
 	pthread_mutex_lock(&config->service_mtx);
+
+	if (arglst[0] == NULL) {
+		pthread_mutex_unlock(&config->service_mtx);
+		return -1;
+	}
+
+	/* A service name is required for enable and disable. */
+	if ((strcmp(arglst[0], "enable") == 0 ||
+	    strcmp(arglst[0], "disable") == 0) &&
+	    (arglst[1] == NULL || arglst[1][0] == '\0')) {
+		status = 1;
+		asprintf(&sendstr, "No service name given.\n");
+		send(sock_fd, &status, 1, 0);
+		send(sock_fd, sendstr, strlen(sendstr), 0);
+		send(sock_fd, &eot, 1, 0);
+		free(sendstr);
+		pthread_mutex_unlock(&config->service_mtx);
+		return 0;
+	}
 
 	/* enable */
 	if (strcmp(arglst[0], "enable") == 0) {
@@ -1190,10 +1244,14 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 				asprintf(&sendstr, "Could not start "
 				    "service.\n");
 				status = 1;
+				free(svs->svname);
+				free(svs);
 			} else if (register_service(config, svs)) {
 				asprintf(&sendstr, "Could not monitor "
 				    "service.\n");
 				status = 1;
+				free(svs->svname);
+				free(svs);
 			} else {
 				asprintf(&sendstr, "Monitoring service.\n");
 				status = 0;
