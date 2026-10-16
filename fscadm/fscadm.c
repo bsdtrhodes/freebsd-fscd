@@ -243,10 +243,12 @@ daemonconnect(char *task)
 		err(EX_OSERR, "socket");
 
 	remote.sun_family = PF_LOCAL;
-	strlcpy(remote.sun_path, socketname ? socketname : SOCK_PATH,
-	    sizeof(remote.sun_path));
-	len = strlen(remote.sun_path) + sizeof(remote.sun_family) + 1;
+	if (strlcpy(remote.sun_path, socketname ? socketname : SOCK_PATH,
+	    sizeof(remote.sun_path)) >= sizeof(remote.sun_path)) {
+		err(EX_CONFIG, "socket path too long");
+	}
 
+	len = strlen(remote.sun_path) + sizeof(remote.sun_family) + 1;
 	if (connect(s, (struct sockaddr *)&remote, len) == -1)
 		err(EX_OSERR, "connect");
 
