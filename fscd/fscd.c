@@ -1847,6 +1847,7 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 		if (unregister_service(config, arglst[1])) {
 			asprintf(&sendstr, "Removing service failed: "
 			    "Not found.\n");
+			(void)remove_retry(config, arglst[1]);
 			status = 1;
 		} else {
 			asprintf(&sendstr, "Service removed.\n");

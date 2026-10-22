@@ -1,5 +1,5 @@
 .\"-
-.\" Copyright (c) 2009-2010 Tom Rhodes
+.\" Copyright (c) 2009-2026 Tom Rhodes
 .\" All rights reserved.
 .\"
 .\" Redistribution and use in source and binary forms, with or without
@@ -25,7 +25,7 @@
 .\"
 .\" $Id: fscd.8 2063 2013-06-03 14:03:41Z bsdtrhodes $
 .\"
-.Dd September 03, 2018
+.Dd October 22, 2026
 .Dt FSCD 8
 .Os
 .Sh NAME
@@ -34,65 +34,176 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl dfVv
+.Op Fl c Ar file
 .Op Fl p Ar pidfile
 .Op Fl s Ar socket
-.Op Fl c Ar file
 .Sh DESCRIPTION
 The
 .Nm
-.Fx ,
-service control daemon, is a service which monitors states of other services and
-attempts to restart them if they die.
+.Fx
+Service Control Daemon is a service monitor which also implements a
+restart, restart retry, and log notification mechanism.
+The
+.Nm
+utility monitors the states of other services
+and will perform multiple attempts to restart them if they die prematurely.
 .Pp
 When invoked, the
 .Nm
-utility will check for services listed in its configuration file,
-.Pa /etc/fscd.conf
+utility will read the list of pre-defined services to monitor
+from its configuration file,
+.Pa /usr/local/etc/fscd.conf ,
 and create a socket to listen for messages from
 .Xr fscadm 8 ,
 .Fx
 the services control administration utility.
 The
 .Xr fscadm 8
-utility will allow for the addition or removal of services from the
-.Xr fscd 8
-internal monitoring list.
+management utility will allow for the addition or deletion of services from the
+.Nm
+utility's internal monitoring list.
 .Pp
-When monitored services terminate, they will be restarted, and a notification
-will be logged to the
+When monitored services terminate,
+.Xr fscd 8
+will attempt to restart them and log status update messages using the
+.Dv LOG_NOTICE
+facility.
+Services that fail this restart will be logged via the
 .Dv LOG_ERR
 facility.
-If
+If the
 .Nm
-is unable to successfully start a service, it will be removed and a log message
-will be issued.
+utility is unable to successfully start a service, that service will be placed
+inside of a retry queue.
+The retry queue will make several attempts to perform the restart while
+writing status updates, including retry count entries into
+.Pa /var/log/messages
+for review.
+The retry queue is not infinite and uses a monotonic clock to set retry
+times, refreshing these times as each service fails to start up the point
+where either the service will restart or the retry count is exhausted.
 .Pp
+The
 .Nm
-uses the
+utility uses the
 .Xr kqueue 2
-interface to be notified about process terminations and
-.Xr rc 8 ,
-resp.
-.Xr service 8
-for (re)starting services, getting their pids and initially checking their
-status.
-.Pp
+interface to receive notifications regarding process terminations.
+The
 .Nm
-is subject the same rules which govern
+utility also utilizes the facilities provided through
+.Xr service 8
+for (re-)starting services, getting their PIDs and initially checking
+on their current status and service state.
+.Pp
+The
+.Nm
+utility is subject the same rules which govern
 .Xr rc 8 ;
 meaning that services must have an entry in
-.Xr rc.conf 5
-before they may be handled through this interface.
-After successfully becoming a daemon, services may be added using the
-.Xr fscadm 8
-utility.
-.Ss SIGNALS
-Several signals don't restart the service immediately as they may be the result 
-of the user restarting it by hand. Instead,
+.Pa /etc/rc.conf
+before they may be managed by the
 .Nm
-will wait up to 60 seconds for the service to restart.
+utility.
+After successfully reading the list of services from
+.Pa /usr/local/etc/fscd.conf
+and becoming a daemon, services may be added or removed
+from monitoring through the use of the
+.Xr fscadm 8
+management utility.
+.Sh IMPLEMENTATION NOTES
+.Ss SERVICE STATE
+A service managed by the
+.Nm
+utility must be in one of the following states:
+.Bl -tag -width "Unregistered"
+.It Sy Disabled
+The service is not running yet remains registered in the service list
+and does not have a retry queue entry.
+Disabled services are not automatically removed and require human intervention.
+.It Sy Enabled
+The service is registered in the service list, is currently running,
+its PID(s) are known, and it is registered with the
+.Xr kqueue 2
+watcher for exit monitoring.
+.It Sy Restarting
+A restart operation is in progress and other workers must be blocked from
+initiating a competing restart for that service.
+.It Sy Pending
+A restart attempt has failed and the service has at least one pending retry
+scheduled for a future attempt.
+The service may have stale PID entries or no PID entries at all.
+.It Sy Unregistered
+The service was removed from the monitored service list by a privileged user
+and will not be restarted.
+Any pending retry attempts should have also been removed.
+Any stale entries, in the unlikely case they exist, will be removed when the
+worker attempts to issue a restart.
+.El
+.Ss RESTART POLICY
+Service management using the
+.Nm
+utility follows a basic restart policy that is, or should be, constrained
+to the following:
+.Bl -bullet
+.It
+Unexpected service exits trigger an immediate restart attempt after being
+notified through the
+.Xr kqueue 2
+watcher.
+.It
+If a restart fails, the service is scheduled for a pre-defined
+number of retry attempts.
+Right now, this is hard coded at five (5) but in the future it may be
+an option supplied on the command line or specified in the configuration file.
+.It
+Each retry has a deadline calculated using
+.Dv CLOCK_MONOTONIC .
+.It
+A successful restart has three requirements including the service successfully
+started and is running, obtaining and updating the new PID assigned to the
+service, and a successful registration with the
+.Xr kqueue 2
+watcher.
+After which, any pending retry queue entries are removed.
+.It
+If PID discovery or
+.Xr kqueue 2
+registration fails, the service restart is considered failed even if the
+service is up and running.
+Either failure makes monitoring unreliable and a privileged user should
+intervene and review the information available; possibly removing and
+re-adding the service to monitoring.
+.It
+When another restart operation is in progress, there should be no attempt
+from another worker to perform restarts.
+Several checks are included to prevent possible retry loops and, once a
+restart is successful, the retry entry should be removed.
+.It
+A service should never be removed except by a privileged user.
+Once the initial restart fails, the service is registered with the
+retry queue and remains there until either a successful restart occurs
+or the retry attempts are exhausted.
+After every retry attempt has failed, the service will enter the
+disabled state.
+.It
+Services in a disabled state require intervention from a privileged user.
+.It
+Once a service has been unregistered, it should be removed from the
+monitored service list, the
+.Xr kqueue 2
+watcher, and the retry queue.
+No retry entry should re-register the service for monitoring.
+.El
+.Ss SIGNALS
+Several signals do not restart the service immediately as they may be the
+result of a privileged user taking action.
+Instead, the
+.Nm
+utility will wait up to 60 seconds for the service to restart.
 These are:
-.Bl -dash -compact -offset
+.Bl -dash -compact
+.It
+SIGINT
 .It
 SIGINT
 .It
@@ -105,50 +216,73 @@ SIGUSR2
 SIGKILL
 .El
 .Sh OPTIONS
-.Bl -tag
+.Bl -tag -width indent
 .It Fl d
 Run
 .Nm
-in the background as a deamon.
-The default is to run in the foreground to show service start messages
-on the screen.
+in the background as a daemon.
+The default is to run in the foreground and show service change messages
+on the console.
 .It Fl f
-Force, if the socket already exists, delete it.
-This can occur if
+Force overwriting a pre-existing socket.
+A stale socket may exist if the
 .Nm
-is already running or was not properly shut down before.
+utility is already running or was not properly shut down previously.
 .It Fl V
 Print out the version of
 .Nm
 and exit.
 .It Fl v
-Verbose, don't fork to background and don't log to
+Verbose, run in the foreground and print messages to the console instead of
+sending them to the
 .Xr syslog 3
-but to console.
+facility.
+The
+.Nm
+utility has several verbosity levels to increase or decrease the amount
+of notifications sent.
+The default setting is
+.Sq 1
+which logs all messages assigned either the
+.Dv LOG_ERR
+or
+.Dv LOG_NOTICE
+will be available in the
+.Pa /var/log/messages
+log file.
+.It Fl c Ar file
+Use the alternative configuration file specified by
+.Ar file
+instead of the default
+.Pa /usr/local/etc/fscd.conf .
 .It Fl p Ar pidfile
-Use alternative
+Use the supplied, alternative
 .Ar pidfile
-pid file instead of the standard
+instead of the standard file created at
 .Pa /var/run/fscd.pid .
 .It Fl s Ar socket
-Use socket
+Use the alternative
 .Ar socket
-instead of the standard socket
+instead of the default socket created at
 .Pa /var/run/fscd.sock .
-.It Fl c Ar file
-Use file
-.Ar file
-as configuration file instead of the standard file
-.Pa /etc/fscd.conf .
 .El
 .Sh FILES
-.Bl -tag -width /var/run/fscd.sock -compact
+.Bl -tag -width /usr/local/etc/fscd.conf
+.It Pa /usr/local/etc/fscd.conf
+Name and location of the configuration file.
+Pre-defined monitoring lists will be read from this file
+during initialization.
+.It Pa /var/run/fscd.pid
+The default pidfile created when the
+.Nm
+utility is started.
 .It Pa /var/run/fscd.sock
-name of the
+Name and location of the
 .Ux
-domain socket
-.It Pa /etc/fscd.conf
-name of the configuration file
+domain socket used to communicate information between
+.Xr fscd 8
+and
+.Xr fscadm 8 .
 .El
 .Sh SEE ALSO
 .Xr kqueue 2 ,
@@ -159,12 +293,11 @@ name of the configuration file
 .Xr fscadm 8 ,
 .Xr rc 8 ,
 .Xr rcorder 8 ,
-.Xr service 8 ,
-.Xr syslog 8
+.Xr service 8
 .Sh HISTORY
 The
 .Nm
-utility is available in both the ports collection and github. 
+utility is available in both the ports collection and GitHub.
 .Sh AUTHORS
 The
 .Nm fsc
@@ -176,7 +309,7 @@ The
 utility may fail to start a service if the parent died with a
 SIGKILL and children, with unique PIDs are not subsequently
 killed off.
-Such cases usally leave resources, such as port numbers or
+Such cases usually leave resources, such as port numbers or
 pidfiles around which confuse
 .Xr service 8 .
 This behavior has been observed on several operating systems
