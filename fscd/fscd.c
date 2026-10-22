@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009-2012 Tom Rhodes. All rights reserved.
+ * Copyright (c) 2009-2026 Tom Rhodes. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -78,8 +78,11 @@ __FBSDID("$FreeBSD$");
 #define SYSCONFDIR "/etc/"
 #endif
 
+/* Useful macro defines. */
+#define PKG_SYSCONFDIR "/usr/local/etc/"
 #define SOCK_PATH _PATH_VARRUN"fscd.sock"
-#define CONF_FILE SYSCONFDIR"fscd.conf"
+#define PID_FILE _PATH_VARRUN"fscd.pid"
+#define CONF_FILE PKG_SYSCONFDIR"fscd.conf"
 #define SERVICE "service"
 #define STATUS "onestatus"
 #define START "restart" // restart is more reliable than just start.
@@ -177,7 +180,7 @@ main(int argc, char *argv[])
 	pthread_condattr_t retry_attr;
 	int verbosity = 1;
 
-	/* check arguments */
+	/* Check arguments */
 	while ((ch = getopt(argc, argv, "Vdvfp:s:c:")) != -1)
 		switch (ch) {
 			case 'V': /* Print version string. */
@@ -211,6 +214,12 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
+	/*
+	 * Verbosity 1 is the default as I felt it important to log
+	 * notices, such as restarts and retry counts, which are not
+	 * errors but important enough to write log entries. It can
+	 * be altered through the documented option.
+	 */
 	switch (verbosity) {
 		case 0:
 			setlogmask(LOG_UPTO(LOG_WARNING));
@@ -226,18 +235,33 @@ main(int argc, char *argv[])
 			break;
 	}
 
-	/* initialize values */
-	if (!socketname && asprintf(&socketname, "%s", SOCK_PATH) <= 0)
+	/* Initialization phase (paths and files). */
+	if (!socketname && asprintf(&socketname, "%s", SOCK_PATH) < 0)
 		err(1, "asprintf");
-	if (!conffile && asprintf(&conffile, "%s", CONF_FILE) <= 0)
+	if (!conffile && asprintf(&conffile, "%s", CONF_FILE) < 0)
 		err(1, "asprintf");
-	if (stat(conffile, &nb_stat) != 0)
-		warn("cannot stat configuration");
-	if (stat(socketname, &nb_stat) == 0) {
+
+	if (stat(PID_FILE, &nb_stat) == 0)
+		errx(1, "A pidfile exists: %s, not starting.", PID_FILE);
+	else if (errno != ENOENT)
+		err(1, "Unable to stat pidfile: %s", PID_FILE);
+
+	if (lstat(socketname, &nb_stat) == 0) {
 		if (!force)
-			err(1, "socket exists, specify -f to overwrite");
-		else if (unlink(socketname) == -1)
-			err(1, "deleting old socket");
+			errx(1, "Socket exists: %s, specify -f to overwrite.",
+			    socketname);
+		if (unlink(socketname) == -1)
+			err(1, "Deleting old socket.");
+	} else if (errno != ENOENT) {
+		err(1, "Unable to stat socket: %s.", socketname);
+	}
+
+	/* Lacking a config file is not fatal. */
+	if (stat(conffile, &nb_stat) == -1) {
+		warnx("Configuration file: %s, does not exist. Services "
+		    "need added manually.", conffile);
+		printlog(LOG_NOTICE, "Configuration file: %s not found, no "
+		    "services will be added during start up.", CONF_FILE);
 	}
 
 #if defined(__FreeBSD__)
@@ -289,7 +313,7 @@ main(int argc, char *argv[])
 	signal(SIGUSR1, handle_sig);
 	signal(SIGUSR2, handle_sig);
 
-	printlog(LOG_NOTICE, "Starting.");
+	printlog(LOG_NOTICE, "Starting ...");
 
 	if ((error = pthread_create(&config.service_thr, NULL,
 	    connect_monitor, &config)) != 0)

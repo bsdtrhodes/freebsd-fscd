@@ -18,6 +18,6 @@ install:
 	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd /usr/local/sbin/
 	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.conf.5 /usr/share/man/man5/
 	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.8 /usr/local/man/man8/
-	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.conf /usr/local/etc/
+	install -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} fscd.conf /usr/local/etc/fscd.conf.sample
 
 .include <bsd.prog.mk>
