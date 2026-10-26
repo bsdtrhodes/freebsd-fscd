@@ -1273,19 +1273,22 @@ make_service(const char *sname)
 /*
  * Get the pids for given process, and fill the structs, emptying the
  * list if it is not empty.
- * Return 0 if process is running and we filled pids, 1 if not.
+ *
+ * This function must be called while holding the lock.
+ *
+ * Return 0 if we found a pid.
+ * Return 1 if we could not find a pid.
+ * Return -1 if we encountered an error.
  */
 static int
 fill_pids(struct service *svs)
 {
 	struct spid *svpid, *svpid_tmp;
-	char *cmdstr;
-	char *tmpstr, *ttmpstr;
+	char *cmdstr, *tmpstr, *ttmpstr;
 	char *pinputp;
-	char pinput[LINE_MAX];
-	char errorstr[LINE_MAX];
+	char pinput[LINE_MAX], errorstr[LINE_MAX];
 	FILE *pp;
-	int retcode;
+	int retcode, found_pid;
 	pid_t pid;
 
 	/* Empty list. */
@@ -1316,7 +1319,12 @@ fill_pids(struct service *svs)
 		return -1;
 	}
 
-	while (fgets(pinput, sizeof pinput, pp) != NULL) {
+	/*
+	 * If we receive "_enable to YES in" then the service is unlikely
+	 * to be enabled in rc.conf. Return "1" in that case.
+	 */
+	found_pid = 0;
+	while (fgets(pinput, sizeof(pinput), pp) != NULL) {
 		if (strstr(pinput, "_enable to YES in") != NULL) {
 			pclose(pp);
 			return 1;
@@ -1324,37 +1332,37 @@ fill_pids(struct service *svs)
 
 		/* 
 		 * Scan the output for a separated list of numbers assuming
-		 * they are pids.  We cannot scan for the service's name, as
-		 * the name might be different to the service script name.
-		 * Though we could assume the service name is properly set
-		 * in its rc script and we could thus just parse the script
-		 * ourselves, exceptions here might have the same probability
-		 * as services with different service and script names
-		 * So we have to skip the first portion up to the
-		 * "is not running" or "is runnind as pid" and assume
-		 * service(8) returns the right script's output.
+		 * they are pids. The service name may be different from the
+		 * start/stop file name.
 		 */
 		for (pinputp = strtok_r(pinput, " .,\t\n", &ttmpstr);
-			pinputp;
+			pinputp != NULL;
 			pinputp = strtok_r(NULL, " .,\t\n", &ttmpstr)) {
 			pid = strtoul(pinputp, &tmpstr, 10);
-			if (tmpstr && tmpstr > pinputp) {
-				if (pid > 0 && getsid(pid) != -1) {
-					svpid = malloc(sizeof(struct spid));
-					if (svpid == NULL) {
-						printlog(LOG_ERR, "Could not "
-						    "allocate PID for "
-						    "service: %s.",
-						    svs->svname);
-						pclose(pp);
-						return 1;
-					}
-					svpid->svpid = pid;
-					SLIST_INSERT_HEAD(&svs->svpids, svpid,
-					    next);
+
+			/* Only accept numeric token. */
+			if (tmpstr == pinputp || *tmpstr != '\0')
+				continue;
+
+			if (pid > 0 && getsid(pid) != -1) {
+				svpid = malloc(sizeof(*svpid));
+				if (svpid == NULL) {
+					printlog(LOG_ERR, "Could not "
+					    "allocate PID for service: "
+					    "%s.", svs->svname);
+					    (void)pclose(pp);
+					    return -1;
 				}
+				svpid->svpid = pid;
+				SLIST_INSERT_HEAD(&svs->svpids, svpid,
+				    next);
+
+				found_pid = 1;
+				break;
 			}
 		}
+		if (found_pid)
+		break;
 	}
 
 	retcode = pclose(pp);
@@ -1777,7 +1785,7 @@ handle_task(struct fscd_cfg *config, char *serviceline, int sock_fd)
 	char *sendstr;
 	struct service *svs;
 	char eot = 4;
-	char status =0;
+	char status = 0;
 
 	for (iter = arglst; (*iter = strsep(&serviceline, ":")) != NULL;) {
 		if (**iter != '\0')
