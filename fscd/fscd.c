@@ -86,7 +86,7 @@ __FBSDID("$FreeBSD$");
 #define SERVICE "service"
 #define STATUS "onestatus"
 #define START "restart" // restart is more reliable than just start.
-#define VERSION "1.2"
+#define VERSION "1.3"
 
 /* TEMPORARY - should be passed via config file/command */
 #define RETRY_INTERVAL  60
