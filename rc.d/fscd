@@ -6,8 +6,8 @@
 #
 
 # PROVIDE: fscd
-# REQUIRE: DAEMON syslogd
-# BEFORE:  LOGIN
+# REQUIRE: LOGIN
+# BEFORE:  securelevel
 # KEYWORD: shutdown
 
 . /etc/rc.subr
